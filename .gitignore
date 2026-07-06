@@ -1,0 +1,11 @@
+# Build artifacts
+implant.exe
+*.exe
+
+# TLS certs (generated at build time)
+server.key
+server.crt
+
+# OS junk
+Thumbs.db
+.DS_Store
