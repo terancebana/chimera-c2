@@ -24,3 +24,16 @@
 
 - [x] Batch keylogs into the beacon response instead of a separate POST request
 - [x] Add TLS with certificate pinning to C2 communication
+
+---
+
+## Server (v1)
+
+- [x] Resolver endpoint — HTTP server returning C2 address
+- [x] C2 listener — HTTPS with cert pinning, 3 routes (handshake/tasks/results)
+- [x] Protocol layer — ECDH + HKDF session keys, GCM encrypt/decrypt
+- [x] Agent registry — track agent ID, first seen, last seen, session key
+- [x] Task queue — per-agent pending tasks (exec, upload, download, screenshot, harvest, uninstall)
+- [x] Result store — save text output, keylogs, file data to disk
+- [x] Database — SQLite (agents, tasks, results tables)
+- [x] Operator CLI — interactive shell with list/exec/upload/download/screenshot/harvest/keylog/result/uninstall commands

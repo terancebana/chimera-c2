@@ -3,8 +3,11 @@ implant.exe
 *.exe
 
 # TLS certs (generated at build time)
-server.key
-server.crt
+server/server.key
+server/server.crt
+
+# Runtime database
+chimera.db
 
 # OS junk
 Thumbs.db
