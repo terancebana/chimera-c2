@@ -27,6 +27,6 @@ echo "[*] Cert pin: $PIN"
 GOOS=windows GOARCH=amd64 go build \
     -ldflags "-s -w -X main.staticKeyHex=$KEY -X main.certPinHex=$PIN" \
     -o implant/implant.exe \
-    implant/implant.go
+    ./implant/
 
 echo "[+] Build complete: implant/implant.exe"

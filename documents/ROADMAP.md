@@ -37,3 +37,19 @@
 - [x] Result store — save text output, keylogs, file data to disk
 - [x] Database — SQLite (agents, tasks, results tables)
 - [x] Operator CLI — interactive shell with list/exec/upload/download/screenshot/harvest/keylog/result/uninstall commands
+
+---
+
+## Implant Modularization
+
+- [x] `main.go` — main(), global config vars, keylog buffer
+- [x] `models.go` — Task, Result, HandshakeResponse, DATA_BLOB, LocalState, KBDLLHOOKSTRUCT
+- [x] `winapi.go` — DLL procs, Windows constants, syscall helpers
+- [x] `crypto.go` — init(), GCM encrypt/decrypt, generateAgentID
+- [x] `comms.go` — resolveC2, performHandshake, beacon, postResult, sendErrorLog, sleepWithJitter
+- [x] `keylogger.go` — startKeylogger, keyboardHookProc, getActiveWindow, mapKey
+- [x] `persistence.go` — installSelf, checkForMutex, registry, scheduled task, uninstall
+- [x] `tasks.go` — handleTask, runCommand
+- [x] `harvest.go` — harvestCredentials, getMasterKey, decryptDPAPI, copyFile
+- [x] `errors.go` — queueError, drainErrors, attachErrors, ERROR_QUEUE
+- [x] Update `build.sh` — change from single file to directory build
