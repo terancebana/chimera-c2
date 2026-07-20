@@ -33,6 +33,12 @@ func init() {
 
 	C2_TRANSPORT = &http.Transport{
 		TLSClientConfig: &tls.Config{
+			// Pin-only verification: we don't care about CA chains or the
+			// hostname, only that the presented cert matches CERT_PIN.
+			// InsecureSkipVerify disables the default chain/hostname checks;
+			// the custom VerifyPeerCertificate below still runs and enforces
+			// the pin, so a mismatch fails closed.
+			InsecureSkipVerify: true,
 			VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 				if CERT_PIN == "" {
 					return nil

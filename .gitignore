@@ -6,6 +6,10 @@ implant.exe
 server/server.key
 server/server.crt
 
+# Per-build static key (secret, generated at build time)
+server/static.key
+static.key
+
 # Runtime database
 chimera.db
 

