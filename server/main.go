@@ -16,7 +16,10 @@ func main() {
 	staticKeyFile := flag.String("static-key", "static.key", "static key file (hex)")
 	dbPath := flag.String("db", "chimera.db", "SQLite database path")
 	profilePath := flag.String("profile", "profile.json", "malleable C2 profile (JSON)")
+	stagePathFlag := flag.String("stage", "stage/stage.exe", "path to the in-memory stage binary")
 	flag.Parse()
+
+	stagePath = *stagePathFlag
 
 	// Load malleable C2 profile
 	if err := loadProfile(*profilePath); err != nil {

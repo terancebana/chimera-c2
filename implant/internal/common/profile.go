@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	_ "embed"
@@ -9,7 +9,7 @@ import (
 var profileJSON []byte
 
 type Profile struct {
-	UserAgents []string         `json:"user_agents"`
+	UserAgents []string          `json:"user_agents"`
 	Headers    map[string]string `json:"headers"`
 	Paths      map[string]string `json:"paths"`
 	Sleep      struct {
@@ -21,7 +21,7 @@ type Profile struct {
 
 var PROFILE Profile
 
-func loadProfile() error {
+func LoadProfile() error {
 	if err := json.Unmarshal(profileJSON, &PROFILE); err != nil {
 		return err
 	}
@@ -33,6 +33,7 @@ func loadProfile() error {
 			"handshake": "/api/v1/auth",
 			"beacon":    "/api/v1/sync",
 			"result":    "/api/v1/telemetry",
+			"stage":     "/api/v1/stage",
 		}
 	}
 	if PROFILE.Sleep.MaxSeconds < PROFILE.Sleep.MinSeconds {

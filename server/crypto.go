@@ -133,7 +133,11 @@ func handleHandshake(w http.ResponseWriter, r *http.Request, agentID string) {
 		return
 	}
 
-	registerAgent(agentID)
+	if !agentExists(agentID) {
+		registerAgent(agentID)
+	} else {
+		heartbeatAgent(agentID)
+	}
 	setSessionKey(agentID, derivedKey)
 
 	resp := HandshakeResponse{

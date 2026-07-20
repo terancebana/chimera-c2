@@ -4,6 +4,7 @@ import "sync"
 
 var ERROR_QUEUE []string
 var ERROR_QUEUE_MUTEX sync.Mutex
+
 const MAX_ERROR_QUEUE = 10
 
 func queueError(tag string) {

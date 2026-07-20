@@ -6,7 +6,7 @@ import (
 )
 
 type Profile struct {
-	UserAgents []string         `json:"user_agents"`
+	UserAgents []string          `json:"user_agents"`
 	Headers    map[string]string `json:"headers"`
 	Paths      map[string]string `json:"paths"`
 	Sleep      struct {
